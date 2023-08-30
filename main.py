@@ -1,4 +1,5 @@
 from tts import create_batch_tts 
+import argparse
 
 import os
 import re
@@ -25,11 +26,23 @@ def split_dialogues(input_file, output_directory):
         with open(os.path.join(output_directory, filename), 'w', encoding='utf-8') as out_file:
             out_file.write(f'{speaker}: {text}\n')
 
-print("Этап 1 - разбиение на отдельные файлы")
-split_dialogues("test.txt","dialog1")
 
-print("Этап 2 - озвучка базовой моделью Silero")
-create_batch_tts("./dialog1/text","character.json")
 
-print("Этап 3 - преобразование голоса через RVC")
-infer_files("./dialog1/tts","character.json")
+def main(dialog_path, output_folder, character_path):
+    print("Этап 1 - Разбиение диалога на отдельные файлы")
+    split_dialogues(dialog_path, output_folder)
+
+    print("Этап 2 - Озвучка базовой моделью Silero")
+    create_batch_tts(f"./{output_folder}/text", character_path)
+
+    print("Этап 3 - Преобразование голоса через RVC")
+    infer_files(f"./{output_folder}/tts", character_path)
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('dialog_path', type=str, help='Путь к файлу с диалогами')
+    parser.add_argument('output_folder', type=str, help='Путь к выходной папке')
+    parser.add_argument('character_path', type=str, help='Путь к файлу с персонажами')
+
+    args = parser.parse_args()
+    main(args.dialog_path, args.output_folder, args.character_path)
