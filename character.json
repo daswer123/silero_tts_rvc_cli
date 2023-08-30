@@ -1,0 +1,16 @@
+{
+    "SpongeBob" : {
+    "model_name" : "SpongeBob",
+    "model_path" : "C:\\test\\silero_tts_rvc_cli\\models\\polina\\polina_zayec_v2.pth",
+    "model_index" : "C:\\test\\silero_tts_rvc_cli\\models\\polina\\polinav2_index.index",
+    "speaker" : "xenia",
+    "pitch" : -3
+    },
+    "Patrick" : {
+        "model_name" : "Patric",
+        "model_path" : "C:\\test\\silero_tts_rvc_cli\\models\\tihonov\\repetur_e300.pth",
+        "model_index" : "C:\\test\\silero_tts_rvc_cli\\models\\tihonov\\repetur_index.index",
+        "speaker" : "eugene",
+        "pitch" : -2
+    }
+}
