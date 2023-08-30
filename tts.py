@@ -14,23 +14,32 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# IMPORTS
 import re
 import timeit
 import torch
 import sys
 import wave
 from datetime import datetime, timedelta
-from num2t4ru import num2text
+from libs.num2t4ru import num2text
 from omegaconf import OmegaConf
+import os
+import argparse
+from tqdm import tqdm
 
+# SETTINGS
+silero_torch_device: str = 'cuda' # cpu, cuda or auto
+# speaker: str = 'xenia' # speakers ['aidar', 'baya', 'kseniya', 'xenia', 'eugene', 'random']
+pitch = 0 # Pitch for RVC, male - female = 12 , female - male = -12, male - male = 0, female-female = 0
+ 
 # Configurable parameters:
 model_id: str = 'v4_ru'
 language: str = 'ru'
 put_accent: bool = True
 put_yo: bool = True
-speaker: str = 'xenia'
+# speaker: str = 'xenia'
 sample_rate: int = 48000  # Hz - 48000, 24000 or 8000
-torch_device: str = 'auto'  # cpu, cuda or auto
 torch_num_threads: int = 6  # Only effective for torch_device = 'cpu' - use 4-6 threads, larger count may slow down TTS
 line_length_limits: dict = {
     'aidar': 870,
@@ -51,41 +60,46 @@ wave_header_size: int = 44  # Bytes
 wave_sample_width: int = int(16 / 8)  # 16 bits == 2 bytes
 
 
-def main():
-    print("main()")
-    input_filename = process_args()
-    origin_lines = load_file(input_filename)
-    line_length_limit: int = line_length_limits[speaker]  # Max text length for speaker
-    # del origin_lines
-    preprocessed_lines, preprocessed_text_len = preprocess_text(origin_lines, line_length_limit)
-    write_lines(input_filename + '_preprocessed.txt', preprocessed_lines)
-    # exit(0)
-    download_models_config()
-    print_models_information()
-    # find_max_line_length_all(input_filename, origin_lines)
-    # exit(0)
-    tts_model: torch.nn.Module = init_model(torch_device, torch_num_threads)
-    print(f'Available speakers: {tts_model.speakers}')
-    process_tts(tts_model, preprocessed_lines, input_filename, wave_file_size_limit, preprocessed_text_len)
+def main(input_folder, speaker):
+    for input_filename in tqdm(os.listdir(input_folder)):
+        if not input_filename.endswith('.txt'):
+            continue  # skip non-text files
+
+        input_filepath = os.path.join(input_folder, input_filename)
+
+        origin_lines = load_file(input_filepath)
+        line_length_limit: int = line_length_limits[speaker]  # Max text length for speaker
+        preprocessed_lines, preprocessed_text_len = preprocess_text(origin_lines, line_length_limit)
+
+        download_models_config()
+
+        tts_model: torch.nn.Module = init_model(silero_torch_device, torch_num_threads)
+
+        output_folder = os.path.join(os.path.dirname(input_folder),"tts")
+        os.makedirs(output_folder, exist_ok=True)
+
+        output_filename = os.path.splitext(input_filename)[0] + '.wav'
+        output_filepath = os.path.join(output_folder, output_filename)
+
+        process_tts(tts_model, preprocessed_lines, output_filepath, wave_file_size_limit, preprocessed_text_len,speaker)
 
 
-def find_max_line_length_all(filename: str, lines: list):
-    global speaker
+def find_max_line_length_all(filename: str, lines: list,speaker):
     for speaker in line_length_limits.keys():
-        find_max_line_length(filename, language, speaker, lines)
+        find_max_line_length(filename, language, speaker, lines,speaker)
 
 
-def find_max_line_length(filename: str, tts_language: str, tts_speaker: str, lines: list):
+def find_max_line_length(filename: str, tts_language: str, tts_speaker: str, lines: list,speaker):
     new_length_limit: int = line_length_limits[tts_speaker]
     # preprocessed_lines, preprocessed_text_len = preprocess_text(origin_lines, line_length_limit)
-    tts_model: torch.nn.Module = init_model(torch_device, torch_num_threads)  # Reinitialize model after speaker change
-    print(f"Processing {tts_language}/{tts_speaker}")
+    tts_model: torch.nn.Module = init_model(silero_torch_device, torch_num_threads)  # Reinitialize model after speaker change
+    # print(f"Processing {tts_language}/{tts_speaker}")
     while True:
         try:
-            print(f'Trying TTS with speaker {tts_speaker} and line_length_limit={new_length_limit}')
+            # print(f'Trying TTS with speaker {tts_speaker} and line_length_limit={new_length_limit}')
             preprocessed_lines, preprocessed_text_len = preprocess_text(lines, new_length_limit)
             process_tts(tts_model, preprocessed_lines, f"{filename}_{tts_speaker}", wave_file_size_limit,
-                        preprocessed_text_len)
+                        preprocessed_text_len,speaker)
             break
         except Exception as exception:
             print(
@@ -97,7 +111,7 @@ def find_max_line_length(filename: str, tts_language: str, tts_speaker: str, lin
 
 
 def process_args() -> str:
-    print("Processing args")
+    # print("Processing args")
     if len(sys.argv) < 2:
         print(F"Usage: {sys.argv[0]} filename.txt")
         exit(1)
@@ -106,10 +120,9 @@ def process_args() -> str:
 
 
 def load_file(filename: str) -> list:
-    print("Loading file " + filename)
-    with open(filename) as f:
+    # print("Loading file " + filename)
+    with open(filename, 'r', encoding='utf-8') as f:
         lines: list = f.readlines()
-    f.close()
     return lines
 
 
@@ -148,7 +161,7 @@ def spell_digits(line) -> str:
 
 
 def preprocess_text(lines: list, length_limit: int) -> (list, int):
-    print(f"Preprocessing text with line length limit={length_limit}")
+    # print(f"Preprocessing text with line length limit={length_limit}")
 
     if length_limit > 3:
         length_limit = length_limit - 2  # Keep a room for trailing char and '\n' char
@@ -225,14 +238,15 @@ def print_models_information():
 
 
 def download_models_config():
-    print("Downloading models config")
+    # print("Downloading models config")
     torch.hub.download_url_to_file('https://raw.githubusercontent.com/snakers4/silero-models/master/models.yml',
                                    'latest_silero_models.yml',
                                    progress=False)
 
 
 def init_model(device: str, threads_count: int) -> torch.nn.Module:
-    print("Initialising model")
+    global speaker
+    # print("Initialising model")
     t0 = timeit.default_timer()
 
     # https://github.com/snakers4/silero-models/issues/183
@@ -244,7 +258,7 @@ def init_model(device: str, threads_count: int) -> torch.nn.Module:
         # torch.backends.cudnn.deterministic = True
         torch_dev: torch.device = torch.device("cuda", 0)
         gpus_count = torch.cuda.device_count()  # 1
-        print("Using {} GPU(s)...".format(gpus_count))
+        # print("Using {} GPU(s)...".format(gpus_count))
     else:
         torch_dev: torch.device = torch.device(device)
     torch.set_num_threads(threads_count)
@@ -252,24 +266,24 @@ def init_model(device: str, threads_count: int) -> torch.nn.Module:
                                                 model='silero_tts',
                                                 language=language,
                                                 speaker=model_id)
-    print("Setup takes {:.2f}".format(timeit.default_timer() - t0))
+    # print("Setup takes {:.2f}".format(timeit.default_timer() - t0))
 
-    print("Loading model")
+    # print("Loading model")
     t1 = timeit.default_timer()
     tts_model.to(torch_dev)  # gpu or cpu
-    print("Model to device takes {:.2f}".format(timeit.default_timer() - t1))
+    # print("Model to device takes {:.2f}".format(timeit.default_timer() - t1))
 
     if torch.cuda.is_available() and device == "auto" or device == "cuda":
-        print("Synchronizing CUDA")
+        # print("Synchronizing CUDA")
         t2 = timeit.default_timer()
         torch.cuda.synchronize()
-        print("Cuda Synch takes {:.2f}".format(timeit.default_timer() - t2))
-    print("Model is loaded")
+        # print("Cuda Synch takes {:.2f}".format(timeit.default_timer() - t2))
+    # print("Model is loaded")
     return tts_model
 
 
 def init_wave_file(name: str, channels: int, sample_width: int, rate: int):
-    print(f'Initialising wave file {name} with {channels} channels {sample_width} sample width {rate} sample rate')
+    # print(f'Initialising wave file {name} with {channels} channels {sample_width} sample width {rate} sample rate')
     wf = wave.open(name, 'wb')
     wf.setnchannels(channels)
     wf.setsampwidth(sample_width)
@@ -338,12 +352,12 @@ def write_wave_chunk(wf, audio, audio_size: int, filename: str, wave_data_limit:
                      stats: Stats):
     next_chunk_size = int(audio.size()[0] * wave_sample_width)
     if audio_size + next_chunk_size > wave_data_limit:
-        print(F"Wave written {audio_size} limit={wave_data_limit} - creating new wave!")
+        # print(F"Wave written {audio_size} limit={wave_data_limit} - creating new wave!")
         wf.close()
         stats.next_file()
         wave_file_number += 1
         audio_size = wave_header_size + next_chunk_size
-        wf = init_wave_file(F'{filename}_{speaker}_{wave_file_number}.wav',
+        wf = init_wave_file(F'{filename}',
                             wave_channels, wave_sample_width, sample_rate)
     else:
         audio_size += next_chunk_size
@@ -353,23 +367,23 @@ def write_wave_chunk(wf, audio, audio_size: int, filename: str, wave_data_limit:
 
 # Process TTS for preprocessed_lines
 def process_tts(tts_model: torch.nn.Module, lines: list, output_filename: str, wave_data_limit: int,
-                preprocessed_text_len: int):
-    print("Starting TTS")
+                preprocessed_text_len: int, speaker):
+    # print("Starting TTS")
     s = Stats(preprocessed_text_len)
     current_line: int = 0
     audio_size: int = wave_header_size
     wave_file_number: int = 0
     next_chunk_size: int
-    wf = init_wave_file(F'{output_filename}_{speaker}_{wave_file_number}.wav', wave_channels, wave_sample_width, sample_rate)
+    wf = init_wave_file(F'{output_filename}', wave_channels, wave_sample_width, sample_rate)
     for line in lines:
         if line == '\n' or line == '':
             continue
-        print(
-            F'{current_line}/{len(lines)} {s.run_time}/{s.run_time_est} '
-            F'{s.processed_text_len}/{s.preprocessed_text_len} chars '
-            F'{s.wave_mib}/{s.wave_mib_est} MiB {s.tts_time}/{s.tts_time_est} TTS '
-            F'{s.tts_time_current}@part{wave_file_number} {s.done_percent}% : {line}'
-        )
+        # print(
+        #     F'{current_line}/{len(lines)} {s.run_time}/{s.run_time_est} '
+        #     F'{s.processed_text_len}/{s.preprocessed_text_len} chars '
+        #     F'{s.wave_mib}/{s.wave_mib_est} MiB {s.tts_time}/{s.tts_time_est} TTS '
+        #     F'{s.tts_time_current}@part{wave_file_number} {s.done_percent}% : {line}'
+        # )
         try:
             audio = tts_model.apply_tts(text=line,
                                         speaker=speaker,
@@ -386,5 +400,58 @@ def process_tts(tts_model: torch.nn.Module, lines: list, output_filename: str, w
         current_line += 1
         s.update(line, next_chunk_size)
 
+import json
 
-main()
+import json
+import re
+
+def create_batch_tts(input_folder, character_json_path):
+    # Загружаем данные из JSON
+    with open(character_json_path, 'r') as f:
+        characters = json.load(f)
+
+    for input_filename in tqdm(os.listdir(input_folder)):
+        if not input_filename.endswith('.txt'):
+            continue  # skip non-text files
+
+        # Извлекаем character_name из имени файла
+        match = re.search(r'_([A-Za-z]+)\.txt$', input_filename)
+        if match is None:
+            print(f"Could not extract character name from file name: {input_filename}")
+            continue
+        character_name = match.group(1)
+
+        if character_name not in characters:
+            print(f"Character name {character_name} not found in JSON file")
+            continue
+
+        character = characters[character_name]
+        speaker = character['speaker']
+
+        input_filepath = os.path.join(input_folder, input_filename)
+
+        origin_lines = load_file(input_filepath)
+        line_length_limit: int = line_length_limits[speaker]  # Max text length for speaker
+        preprocessed_lines, preprocessed_text_len = preprocess_text(origin_lines, line_length_limit)
+
+        download_models_config()
+
+        tts_model: torch.nn.Module = init_model(silero_torch_device, torch_num_threads)
+
+        output_folder = os.path.join(os.path.dirname(input_folder),"tts")
+        os.makedirs(output_folder, exist_ok=True)
+
+        output_filename = os.path.splitext(input_filename)[0] + '.wav'
+        output_filepath = os.path.join(output_folder, output_filename)
+
+        process_tts(tts_model, preprocessed_lines, output_filepath, wave_file_size_limit, preprocessed_text_len, speaker)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_folder', type=str, required=True, help='Path to the input folder')
+    parser.add_argument('--speaker', type=str, required=True, help='Speaker name')
+    args = parser.parse_args()
+
+    main(args.input_folder, args.speaker)
+
