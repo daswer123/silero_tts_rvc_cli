@@ -1,3 +1,23 @@
+# Преобразование текстового диалога в озвученный голосом любого персонажа
+
+Процес создания от текстового диалога до его полноценной озвучки с помощью silero+rvc
+
+## Подготовка
+
+Прежде всего вы должны подготовить следущие вещи:
+1) Вы должны создать файл characters.json в котором вы должны заполнить данные о персонажах которые будут озвучивать ваш диалог. Пример файла вы можете посмотреть [тут](https://github.com/daswer123/silero_tts_rvc_cli/blob/master/character.json) 
+2) Вам нужно подготовить модели rvc с голосами ваших персонажей, достаточно только модели ( .pth ) но можно добавить и индекс файл ( .index )
+3) Убедитесь что ваш диалог имеет [такой формат](https://github.com/daswer123/silero_tts_rvc_cli/blob/master/test.txt)
+
+## Работа со скриптом
+1) Установите все зависимости через install.bat
+2) Измените переменные в launch.bat и запустите скрипт
+3) Или вы можете запустить через консоль `call venv/scripts/activate` далее `python main.py some.txt out_path character.json`
+
+# DEMO
+
+https://github.com/daswer123/silero_tts_rvc_cli/assets/22278673/12dfb2ec-9ea0-46fa-a4d8-40d92ea97e0f
+
 # About silero_tts_standalone
 silero_tts_standalone is a simple script which can be used to TTS large text with [Silero TTS models](https://github.com/snakers4/silero-models) locally (do txt -> wav conversion).
 
