@@ -1,4 +1,4 @@
-from tts import create_batch_tts 
+from tts import create_batch_tts, download_models_config
 import argparse
 
 import os
@@ -29,6 +29,7 @@ def split_dialogues(input_file, output_directory):
 
 
 def main(dialog_path, output_folder, character_path):
+    download_models_config()
     print("Этап 1 - Разбиение диалога на отдельные файлы")
     split_dialogues(dialog_path, output_folder)
 
