@@ -10,8 +10,8 @@
 3) Убедитесь что ваш диалог имеет [такой формат](https://github.com/daswer123/silero_tts_rvc_cli/blob/master/test.txt)
 
 ## Работа со скриптом
-1) Установите все зависимости через install.bat
-2) Измените переменные в launch.bat и запустите скрипт
+1) Установите все зависимости через `install.bat`
+2) Измените переменные в `launch.bat` и запустите скрипт
 3) Или вы можете запустить через консоль `call venv/scripts/activate` далее `python main.py some.txt out_path character.json`
 
 # DEMO
